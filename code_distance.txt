@@ -1,0 +1,852 @@
+##############Distance############
+
+import pandas as pd
+from geopy.distance import geodesic
+import pyreadstat
+
+
+stata_file = 'und_coord.dta'
+df, meta = pyreadstat.read_dta(stata_file)
+
+
+distances = []
+
+
+for i, nodo1 in df.iterrows():
+    for j, nodo2 in df.iterrows():
+        if i < j:  
+            coord_nodo1 = (nodo1['lat'], nodo1['lon'])
+            coord_nodo2 = (nodo2['lat'], nodo2['lon'])
+            
+            
+            distance = geodesic(coord_nodo1, coord_nodo2).kilometers
+            
+            
+            distances.append({'Nodo1': nodo1['id'], 'Nodo2': nodo2['id'], 'Lenght': distance})
+            
+            distances.append({'Nodo1': nodo2['id'], 'Nodo2': nodo1['id'], 'Lenght': distance})
+
+
+df_distances = pd.DataFrame(distances)
+
+
+output_file = 'Lenght_Links_dir.dta'
+pyreadstat.write_dta(df_distancs, output_file)
+
+
+
+//////////////////////////////////////
+
+import pandas as pd
+import numpy as np
+
+
+file_path = 'Data.dta'
+data = pd.read_stata(file_path)
+
+
+    R = 6371  
+    phi1 = np.radians(lat1)
+    phi2 = np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+    a = np.sin(delta_phi / 2.0)**2 + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2.0)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
+
+
+distances_list = []
+
+
+for i, node1 in data.iterrows():
+    for j, node2 in data.iterrows():
+        if i < j:  
+            distance = haversine(node1['lat'], node1['lon'], node2['lat'], node2['lon'])
+            distances_list.append({'Node1': node1['id'], 'Node2': node2['id'], 'Distance_km': distance})
+
+
+distances = pd.DataFrame(distances_list)
+
+
+distances.to_csv('node_distances.csv', index=False)
+
+
+print(distances.head())
+
+import pandas as pd
+import networkx as nx
+from concurrent.futures import ThreadPoolExecutor  
+ThreadPoolExecutor
+
+df = pd.read_csv("risultati_undir_net_new.txt", sep='\t')
+
+df = df.sort_values(by='Q_normalized')
+
+
+percentile_95 = df['Q_normalized'].quantile(0.95)
+
+
+df['A_Q_23'] = df['Q_normalized'].apply(lambda x: 1 if x >= percentile_95 else 0)
+
+
+distances_df = pd.read_csv("node_distances.csv")
+
+merged_df = pd.merge(df, distances_df, how='left', left_on=['id_i', 'id_j'], right_on=['Node1', 'Node2'])
+
+
+merged_df = merged_df.drop(columns=['Node1', 'Node2'])
+
+
+print(merged_df.head())
+
+
+
+merged_df.to_csv("merged_results_with_distances.csv", index=False)
+
+
+filtered_df = merged_df[merged_df['A_Q_23'] == 1]
+
+
+mean_distance_per_id_i = filtered_df.groupby('id_i')['Distance_km'].mean().reset_index()
+
+
+mean_distance_per_id_i.columns = ['id_i', 'Mean_Distance_km']
+
+import matplotlib.pyplot as plt
+
+
+mean_distance_per_id_i.to_csv("mean_distance_per_id_i.csv", index=False)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+sns.set(style="white")
+
+
+plt.figure(figsize=(12, 8))
+
+
+sns.histplot(mean_distance_per_id_i['Mean_Distance_km'], bins=30, kde=True, color="steelblue", edgecolor="black")
+
+
+plt.title('Distribution of Mean Distance (km) per Node', fontsize=20)
+plt.xlabel('Mean Distance (km)', fontsize=15)
+plt.ylabel('Frequency', fontsize=15)
+
+
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+
+
+mean_value = mean_distance_per_id_i['Mean_Distance_km'].mean()
+plt.axvline(mean_value, color='orangered', linestyle='--', linewidth=2)
+plt.text(mean_value + 10, plt.ylim()[1] * 0.9, f'Mean: {mean_value:.2f} km', color='orangered', fontsize=12)
+
+
+plt.annotate('Most frequent distances', xy=(mean_value, 50), xytext=(mean_value + 200, 80), arrowprops=dict(facecolor='black', shrink=0.05))
+
+
+plt.show()
+
+########################################
+
+
+import pandas as pd
+
+
+mean_distance_df = pd.read_csv('mean_distance_per_id_i.csv')
+Data_df = pd.read_stata('Data.dta')
+
+
+merged_df = pd.merge(mean_distance_df, Data_df, left_on='id_i', right_on='Nodo', how='inner')
+
+
+print(merged_df.head())
+
+
+merged_df.to_csv('merged_data.csv', index=False)
+
+##########################################
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+merged_df = pd.read_csv('merged_data.csv')
+
+
+merged_df['log_normal_Degree'] = np.log(merged_df['normal_BetweennessCentrality'] + 1)  
+
+
+sns.set(style="whitegrid")
+
+
+plt.figure(figsize=(10, 6))
+
+
+sns.scatterplot(x='Mean_Distance_km', y='log_normal_Degree', data=merged_df, color='blue', edgecolor='black')
+
+
+plt.title('Scatter Plot of Mean Distance (km) vs. Log of Normalized Degree', fontsize=20)
+plt.xlabel('Mean Distance (km)', fontsize=15)
+plt.ylabel('Log of Normalized Degree', fontsize=15)
+
+
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+
+
+plt.show()
+
+################################################
+
+import geopandas as gpd
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+
+po_basin = gpd.read_file('po_basin.shp')
+
+
+merged_data = pd.read_csv('merged_data.csv')
+
+
+gdf = gpd.GeoDataFrame(merged_data, geometry=gpd.points_from_xy(merged_data.lon, merged_data.lat), crs="EPSG:4326")
+
+
+po_basin = po_basin.to_crs("EPSG:4326")
+
+
+gdf_in_po_basin = gpd.sjoin(gdf, po_basin, how="inner", predicate="within")
+
+
+gdf_in_po_basin['log_Degree'] = np.log(gdf_in_po_basin['DegreeCentrality'] + 1)
+
+plt.figure(figsize=(10, 6))
+
+
+sns.regplot(x='Mean_Distance_km', y='log_Degree', data=gdf_in_po_basin, scatter_kws={'alpha':0.5, 'color':'blue'}, lowess=True, line_kws={'color':'red'})
+
+
+plt.title('Mean Distance (km) vs Log of Degree Centrality within Po Basin (Non-linear Fit)')
+plt.xlabel('Mean Distance (km)')
+plt.ylabel('Log of Degree Centrality')
+
+
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+
+
+plt.grid(True)
+
+
+plt.show()
+
+##################Correlation only for Bacin grid points###############
+import matplotlib.pyplot as plt
+import seaborn as sns
+import geopandas as gpd
+import pandas as pd
+
+
+po_basin = gpd.read_file('po_basin.shp')
+
+
+file_path = r"Data.dta"
+data = pd.read_stata(file_path)
+
+
+gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data.lon, data.lat), crs="EPSG:4326")
+
+
+po_basin = po_basin.to_crs("EPSG:4326")
+
+
+gdf_in_po_basin = gpd.sjoin(gdf, po_basin, how="inner", predicate="within")
+
+
+heatmap_data = gdf_in_po_basin[['InStrength', 'OutStrength', 'NetworkDivergence', 'StructuralHolesConstraint', 'DegreeCentrality', 'Clustering', 'ClosenessCentrality', 'BetweennessCentrality']].dropna()
+
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(heatmap_data.corr(), annot=True, cmap='coolwarm')
+plt.title('Heatmap of Correlation Between Variables within Po Basin')
+plt.show()
+
+#########PDF e CCDF##############################
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import geopandas as gpd
+
+
+
+po_basin = gpd.read_file('po_basin.shp')
+
+
+file_path = r"Data.dta"
+data = pd.read_stata(file_path)
+
+
+gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data.lon, data.lat), crs="EPSG:4326")
+
+
+po_basin = po_basin.to_crs("EPSG:4326")
+
+
+gdf_in_po_basin = gpd.sjoin(gdf, po_basin, how="inner", predicate="within")
+
+
+gdf_in_po_basin['log_Degree'] = np.log(gdf_in_po_basin['DegreeCentrality'] + 1)
+
+
+plt.figure(figsize=(10, 6))
+sns.histplot(gdf_in_po_basin['log_Degree'], kde=True, bins=30, color="blue", edgecolor="black")
+plt.title('Probability Density Function of Log Degree Centrality within Po Basin')
+plt.xlabel('Log Degree Centrality')
+plt.ylabel('Density')
+plt.grid(True)
+plt.show()
+
+
+sorted_log_degree = np.sort(gdf_in_po_basin['log_Degree'])
+cdf = np.arange(1, len(sorted_log_degree) + 1) / len(sorted_log_degree)
+
+
+plt.figure(figsize=(10, 6))
+plt.plot(sorted_log_degree, 1 - cdf, marker='.', linestyle='none')
+plt.title('Complementary Cumulative Distribution Function (CCDF) of Log Degree Centrality within Po Basin')
+plt.xlabel('Log Degree Centrality')
+plt.ylabel('CCDF')
+plt.ylim(1e-4, 1)
+plt.yscale('log')
+plt.grid(True)
+plt.show()
+#####################################
+
+import geopandas as gpd
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+po_basin = gpd.read_file('po_basin.shp')
+
+
+data = pd.read_stata('Data.dta')
+
+
+gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data.lon, data.lat), crs="EPSG:4326")
+
+
+po_basin = po_basin.to_crs("EPSG:4326")
+
+
+gdf_in_po_basin = gpd.sjoin(gdf, po_basin, how="inner", predicate="within")
+
+
+gdf_in_po_basin['Clustering_Quartile'] = pd.qcut(gdf_in_po_basin['Clustering'], 4, labels=['LOW', 'MEDIUM-LOW', 'MEDIUM-HIGH', 'HIGH'])
+
+
+fig, ax = plt.subplots(figsize=(10, 8))
+
+
+po_basin.plot(ax=ax, color='none', edgecolor='black')
+
+
+gdf_in_po_basin.plot(column='Clustering_Quartile', ax=ax, legend=True, cmap='Oranges', markersize=50, edgecolor='black')
+
+
+plt.title('Distribution of Clustering Coefficient in the Po River Basin', fontsize=15)
+ax.set_axis_off()
+
+
+plt.show()
+
+#########################################################################
+
+import pandas as pd
+import networkx as nx
+import community.community_louvain as community_louvain
+import matplotlib.pyplot as plt
+import numpy as np
+import geopandas as gpd
+
+
+df = pd.read_csv("risultati_undir_net_new.txt", sep='\t')
+
+
+percentile_95 = df['Q_normalized'].quantile(0.95)
+
+
+df['A_Q_23'] = df['Q_normalized'].apply(lambda x: 1 if x >= percentile_95 else 0)
+
+
+po_basin = gpd.read_file('po_basin.shp')
+
+
+node_positions = pd.read_csv('merged_data.csv')
+
+
+gdf = gpd.GeoDataFrame(node_positions, geometry=gpd.points_from_xy(node_positions.lon, node_positions.lat), crs="EPSG:4326")
+
+
+po_basin = po_basin.to_crs("EPSG:4326")
+
+
+gdf_in_po_basin = gpd.sjoin(gdf, po_basin, how="inner", predicate="within")
+
+
+df_filtered = df[df['id_i'].isin(gdf_in_po_basin['id']) & df['id_j'].isin(gdf_in_po_basin['id'])]
+
+
+G = nx.Graph()
+
+
+for index, row in df_filtered.iterrows():
+    G.add_edge(row['id_i'], row['id_j'], weight=row['A_Q_23'])
+
+random_seed = 4289    
+
+
+communities = community_louvain.best_partition(G, weight='weight', random_state=random_seed)
+
+
+community_set = set(communities.values())
+colors = ['red', 'darkblue', 'darkgreen']
+
+
+community_color_map = {com: colors[i % len(colors)] for i, com in enumerate(sorted(community_set))}
+
+
+pos = {node: (gdf_in_po_basin.loc[gdf_in_po_basin['id'] == node, 'lon'].values[0], 
+              gdf_in_po_basin.loc[gdf_in_po_basin['id'] == node, 'lat'].values[0]) for node in G.nodes()}
+
+
+fig, ax = plt.subplots(figsize=(15, 15))
+po_basin.plot(ax=ax, color='whitesmoke', edgecolor='black')
+
+
+for com, color in community_color_map.items():
+    nodes_in_community = [n for n in communities.keys() if communities[n] == com]
+    
+    nx.draw_networkx_nodes(G, pos, nodelist=nodes_in_community, node_color=color, label=f'Community {com + 1}', node_size=50, ax=ax)
+
+nx.draw_networkx_edges(G, pos, alpha=0.2, width=0.2, edge_color='darkslategrey', ax=ax)
+
+plt.title('Community Detection Result within the Po Basin')
+plt.legend()
+
+plt.savefig("community_detection_po_basin.jpg", format="jpg", dpi=300)
+plt.show()
+#########
+import pandas as pd
+
+
+communities_df = pd.DataFrame(list(communities.items()), columns=['Node', 'Community'])
+
+
+merged_data = pd.read_csv('merged_data.csv')
+
+
+merged_data_with_communities = pd.merge(merged_data, communities_df, left_on='id', right_on='Node', how='left')
+
+
+merged_data_with_communities.drop(columns=['Node'], inplace=True)
+
+
+merged_data_with_communities['Community'] = merged_data_with_communities['Community'].replace({0: 1, 1: 2, 2: 3})
+
+
+merged_data_with_communities.to_csv('merged_data_with_communities.csv', index=False)
+
+
+print(merged_data_with_communities.head())
+
+############################
+
+
+
+community_1 = merged_data_with_communities[merged_data_with_communities['Community'] == 0]
+community_2 = merged_data_with_communities[merged_data_with_communities['Community'] == 1]
+community_3 = merged_data_with_communities[merged_data_with_communities['Community'] == 2]
+
+mean_structural_holes_1 = community_1['StructuralHolesConstraint'].mean()
+mean_structural_holes_2 = community_2['StructuralHolesConstraint'].mean()
+mean_structural_holes_3 = community_3['StructuralHolesConstraint'].mean()
+
+print(f"Community 1 - Mean Structural Holes: {mean_structural_holes_1}")
+print(f"Community 2 - Mean Structural Holes: {mean_structural_holes_2}")
+print(f"Community 3 - Mean Structural Holes: {mean_structural_holes_3}")
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='StructuralHolesConstraint', data=merged_data_with_communities)
+plt.title('Distribution of Structural Holes by Community')
+plt.xlabel('Community')
+plt.ylabel('Structural Holes')
+plt.show()
+
+################################################
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+community_1 = merged_data_with_communities[merged_data_with_communities['Community'] == 1]
+community_2 = merged_data_with_communities[merged_data_with_communities['Community'] == 2]
+community_3 = merged_data_with_communities[merged_data_with_communities['Community'] == 3]
+
+
+mean_degree_1 = community_1['normal_Degree'].mean()
+mean_degree_2 = community_2['normal_Degree'].mean()
+mean_degree_3 = community_3['normal_Degree'].mean()
+
+mean_closeness_1 = community_1['normal_ClosenessCentrality'].mean()
+mean_closeness_2 = community_2['normal_ClosenessCentrality'].mean()
+mean_closeness_3 = community_3['normal_ClosenessCentrality'].mean()
+
+mean_betweenness_1 = community_1['normal_BetweennessCentrality'].mean()
+mean_betweenness_2 = community_2['normal_BetweennessCentrality'].mean()
+mean_betweenness_3 = community_3['normal_BetweennessCentrality'].mean()
+
+mean_instrength_1 = community_1['InStrength'].mean()
+mean_instrength_2 = community_2['InStrength'].mean()
+mean_instrength_3 = community_3['InStrength'].mean()
+
+mean_outstrength_1 = community_1['OutStrength'].mean()
+mean_outstrength_2 = community_2['OutStrength'].mean()
+mean_outstrength_3 = community_3['OutStrength'].mean()
+
+
+print(f"Community 1 - Mean normal_Degree: {mean_degree_1}")
+print(f"Community 2 - Mean normal_Degree: {mean_degree_2}")
+print(f"Community 3 - Mean normal_Degree: {mean_degree_3}")
+
+print(f"Community 1 - Mean normal_ClosenessCentrality: {mean_closeness_1}")
+print(f"Community 2 - Mean normal_ClosenessCentrality: {mean_closeness_2}")
+print(f"Community 3 - Mean normal_ClosenessCentrality: {mean_closeness_3}")
+
+print(f"Community 1 - Mean normal_BetweennessCentrality: {mean_betweenness_1}")
+print(f"Community 2 - Mean normal_BetweennessCentrality: {mean_betweenness_2}")
+print(f"Community 3 - Mean normal_BetweennessCentrality: {mean_betweenness_3}")
+
+print(f"Community 1 - Mean InStrength: {mean_instrength_1}")
+print(f"Community 2 - Mean InStrength: {mean_instrength_2}")
+print(f"Community 3 - Mean InStrength: {mean_instrength_3}")
+
+print(f"Community 1 - Mean OutStrength: {mean_outstrength_1}")
+print(f"Community 2 - Mean OutStrength: {mean_outstrength_2}")
+print(f"Community 3 - Mean OutStrength: {mean_outstrength_3}")
+
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='normal_Degree', data=merged_data_with_communities)
+plt.title('Distribution of Normalized Degree by Community')
+plt.xlabel('Community')
+plt.ylabel('Normalized Degree')
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='normal_ClosenessCentrality', data=merged_data_with_communities)
+plt.title('Distribution of Normalized Closeness Centrality by Community')
+plt.xlabel('Community')
+plt.ylabel('Normalized Closeness Centrality')
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='normal_BetweennessCentrality', data=merged_data_with_communities)
+plt.title('Distribution of Normalized Betweenness Centrality by Community')
+plt.xlabel('Community')
+plt.ylabel('Normalized Betweenness Centrality')
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='InStrength', data=merged_data_with_communities)
+plt.title('Distribution of InStrength by Community')
+plt.xlabel('Community')
+plt.ylabel('InStrength')
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Community', y='OutStrength', data=merged_data_with_communities)
+plt.title('Distribution of OutStrength by Community')
+plt.xlabel('Community')
+plt.ylabel('OutStrength')
+plt.show()
+
+##################Dominant_Orientation##############################
+
+import pandas as pd
+import geopandas as gpd
+import networkx as nx
+import matplotlib.pyplot as plt
+import contextily as ctx
+import math
+import numpy as np
+   
+import math
+
+def calculate_orientation_and_distance(G):
+    orientation_strength_out = {}
+    orientation_strength_in = {}
+    outward_orientation = {}
+    inward_orientation = {}
+    outward_distance = {}
+    inward_distance = {}
+    
+    num_intervals = 8
+    interval_size = 2 * math.pi / num_intervals
+    
+    for node in G.nodes:
+        orientation_strength_out[node] = {angle: 0 for angle in range(0, 360, 45)}
+        orientation_strength_in[node] = {angle: 0 for angle in range(0, 360, 45)}
+    
+    for u, v, weight in G.edges(data='weight'):
+        delta_x = G.nodes[v]['lon'] - G.nodes[u]['lon']
+        delta_y = G.nodes[v]['lat'] - G.nodes[u]['lat']
+        
+        
+        lon_km = delta_x * 111.32 * math.cos(math.radians(G.nodes[u]['lat']))
+        lat_km = delta_y * 110.574
+        distance_km = math.sqrt(lon_km**2 + lat_km**2)
+        
+        angle = math.atan2(delta_y, delta_x) * 180 / math.pi
+        if angle < 0:
+            angle += 360
+        
+        orientation_out = int(angle / 45) * 45
+        orientation_in = (orientation_out + 180) % 360
+        orientation_strength_out[u][orientation_out] += weight
+        orientation_strength_in[v][orientation_in] += weight
+    
+    for node in G.nodes:
+        max_out_strength = max(orientation_strength_out[node].values())
+        max_in_strength = max(orientation_strength_in[node].values())
+        
+        outward_orientation[node] = [angle for angle, strength in orientation_strength_out[node].items() if strength == max_out_strength]
+        inward_orientation[node] = [angle for angle, strength in orientation_strength_in[node].items() if strength == max_in_strength]
+    
+    for node in G.nodes:
+        outward_distance[node] = {}
+        for angle in outward_orientation[node]:
+            total_distance = 0
+            num_elements = 0
+            for v in G.neighbors(node):
+                delta_x = G.nodes[v]['lon'] - G.nodes[node]['lon']
+                delta_y = G.nodes[v]['lat'] - G.nodes[node]['lat']
+                
+                lon_km = delta_x * 111.32 * math.cos(math.radians(G.nodes[node]['lat']))
+                lat_km = delta_y * 110.574
+                distance_km = math.sqrt(lon_km**2 + lat_km**2)
+                
+                angle_to_neighbor = math.atan2(delta_y, delta_x) * 180 / math.pi
+                if angle_to_neighbor < 0:
+                    angle_to_neighbor += 360
+                if int(angle_to_neighbor / 45) * 45 == angle:
+                    total_distance += distance_km
+                    num_elements += 1
+            if num_elements > 0:
+                outward_distance[node][angle] = total_distance / num_elements
+            else:
+                outward_distance[node][angle] = None
+    
+    for node in G.nodes:
+        inward_distance[node] = {}
+        for angle in inward_orientation[node]:
+            total_distance = 0
+            num_elements = 0
+            for u in G.predecessors(node):
+                delta_x = G.nodes[node]['lon'] - G.nodes[u]['lon']
+                delta_y = G.nodes[node]['lat'] - G.nodes[u]['lat']
+                
+                lon_km = delta_x * 111.32 * math.cos(math.radians(G.nodes[u]['lat']))
+                lat_km = delta_y * 110.574
+                distance_km = math.sqrt(lon_km**2 + lat_km**2)
+                
+                angle_to_neighbor = math.atan2(delta_y, delta_x) * 180 / math.pi
+                if angle_to_neighbor < 0:
+                    angle_to_neighbor += 360
+                if int(angle_to_neighbor / 45) * 45 == angle:
+                    total_distance += distance_km
+                    num_elements += 1
+            if num_elements > 0:
+                inward_distance[node][angle] = total_distance / num_elements
+            else:
+                inward_distance[node][angle] = None
+    
+    return outward_orientation, inward_orientation, outward_distance, inward_distance
+
+
+
+df = pd.read_stata(r"lat_lon_q.dta")
+
+
+df = df.sort_values(by='q_normalized', ascending=False)
+
+
+percentile_95 = df['q_normalized'].quantile(0.95)
+
+
+df['A_q'] = df['q_normalized'].apply(lambda x: 1 if x >= percentile_95 else 0)
+
+
+G_directed = nx.DiGraph()
+
+
+for _, row in df.iterrows():
+    
+    G_directed.add_node(row['Nodo1'], lat=row['lat1'], lon=row['lon1'])
+    G_directed.add_node(row['Nodo'], lat=row['lat2'], lon=row['lon2'])
+
+    
+    if row['A_q'] == 1:
+        G_directed.add_edge(row['Nodo1'], row['Nodo'], weight=row['A_q'])
+
+
+dominant_outward_orientation, dominant_inward_orientation, outward_propagation_distance, inward_propagation_distance = calculate_orientation_and_distance(G_directed)
+
+
+df_outward = pd.DataFrame.from_dict(dominant_outward_orientation, orient='index')
+
+
+df_outward.columns = [f'Dominant_Outward_Orientation_{i+1}' for i in range(df_outward.shape[1])]
+
+
+df_outward.to_csv('dominant_outward_orientations.csv')
+
+
+geometry = gpd.points_from_xy(df['lon1'], df['lat1'])  
+gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:4326')
+
+
+lon_min, lat_min, lon_max, lat_max =  3, 41, 20, 50
+
+
+fig, ax = plt.subplots(figsize=(15, 10), dpi=300)
+ax.set_xlim(lon_min, lon_max)
+ax.set_ylim(lat_min, lat_max)
+
+
+ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
+
+
+gdf.plot(ax=ax, color='blue', markersize=5)
+
+
+def plot_arrows(ax, row, orientations, distances):
+    colors = ['red', 'green', 'blue', 'orange', 'purple', 'yellow', 'cyan', 'magenta']
+    for i, angle in enumerate(orientations):
+        if distances[angle] is not None and distances[angle] != 0:  
+            arrow_length = 0.05  
+            dx = arrow_length * np.cos(np.deg2rad(angle))
+            dy = arrow_length * np.sin(np.deg2rad(angle))
+            ax.arrow(row['lon1'], row['lat1'], dx, dy, head_width=0.02, head_length=0.05, fc=colors[i], ec=colors[i])
+
+
+for idx, row in df.iterrows():
+    orientations = dominant_outward_orientation.get(row['Nodo1'], [])
+    if orientations:
+        distances = outward_propagation_distance.get(row['Nodo1'], {})
+        plot_arrows(ax, row, orientations, distances)
+
+
+plt.title('Map with Outward Orientations Arrows')
+
+
+plt.show()
+
+
+
+
+data = {
+    'Node': list(G_directed.nodes()),
+    'Dominant_Outward_Orientation': [dominant_outward_orientation.get(node, []) for node in G_directed.nodes()],
+    'Dominant_Inward_Orientation': [dominant_inward_orientation.get(node, []) for node in G_directed.nodes()],
+    'Outward_Propagation_Distance': [outward_propagation_distance.get(node, {}) for node in G_directed.nodes()],
+    'Inward_Propagation_Distance': [inward_propagation_distance.get(node, {}) for node in G_directed.nodes()]
+}
+
+df_combined = pd.DataFrame(data)
+
+
+df_combined.to_csv('combined_data.csv', index=False)
+
+
+
+fig, ax = plt.subplots(figsize=(15, 10), dpi=300)
+ax.set_xlim(lon_min, lon_max)
+ax.set_ylim(lat_min, lat_max)
+
+
+ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
+
+
+gdf.plot(ax=ax, color='blue', markersize=5)
+
+
+
+for idx, row in df.iterrows():
+    inward_orientations = dominant_inward_orientation.get(row['Nodo1'], [])
+    if inward_orientations:
+        inward_distances = inward_propagation_distance.get(row['Nodo1'], {})
+        plot_arrows(ax, row, inward_orientations, inward_distances)
+
+
+plt.title('Map with Inward and Inward Orientations Arrows')
+
+
+plt.show()
+
+
+
+def plot_arrows(ax, row, orientations, distances):
+    colors = ['red', 'green', 'blue', 'orange', 'purple', 'yellow', 'cyan', 'magenta']
+    for i, angle in enumerate(orientations):
+        if distances[angle] is not None and distances[angle] != 0:  
+            arrow_length = 0.05  
+            dx = -arrow_length * np.cos(np.deg2rad(angle))  
+            dy = -arrow_length * np.sin(np.deg2rad(angle))  
+            ax.arrow(row['lon1'], row['lat1'], dx, dy, head_width=0.02, head_length=0.05, fc=colors[i], ec=colors[i])
+
+
+
+fig, ax = plt.subplots(figsize=(15, 10), dpi=300)
+ax.set_xlim(lon_min, lon_max)
+ax.set_ylim(lat_min, lat_max)
+
+
+ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
+
+
+gdf.plot(ax=ax, color='blue', markersize=5)
+
+
+
+for idx, row in df.iterrows():
+    inward_orientations = dominant_inward_orientation.get(row['Nodo1'], [])
+    if inward_orientations:
+        inward_distances = inward_propagation_distance.get(row['Nodo1'], {})
+        plot_arrows(ax, row, inward_orientations, inward_distances)
+
+
+plt.title('Map with Inward and Inward Orientations Arrows')
+
+
+plt.show()
+
+
+

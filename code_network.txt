@@ -1,0 +1,148 @@
+########Indirect network
+
+import pandas as pd
+import networkx as nx
+from concurrent.futures import ThreadPoolExecutor  # Aggiungi questa riga per importare ThreadPoolExecutor
+
+
+df = pd.read_csv("risultati_undir_net_new.txt", sep='\t')
+
+
+df = df.sort_values(by='Q_normalized')
+
+
+percentile_95 = df['Q_normalized'].quantile(0.95)
+
+
+df['A_Q_23'] = df['Q_normalized'].apply(lambda x: 1 if x >= percentile_95 else 0)
+
+
+print(df)
+
+
+G = nx.Graph()
+
+
+for _, row in df.iterrows():
+    if row['A_Q_23'] != 0:
+        G.add_edge(row['id_i'], row['id_j'], weight=row['A_Q_23'])
+
+
+print("Numero di nodi:", G.number_of_nodes())
+print("Numero di archi:", G.number_of_edges())
+
+
+degree_centrality = nx.degree_centrality(G)
+clustering = nx.clustering(G, weight='weight')
+closeness_centrality = nx.closeness_centrality(G, distance='weight')
+betweenness_centrality = nx.betweenness_centrality(G, weight='weight')
+structural_holes = nx.constraint(G, weight='weight')
+# Calcolo il coefficiente di clustering globale
+global_clustering = nx.transitivity(G)
+if nx.is_connected(G):
+    
+    average_shortest_path = nx.average_shortest_path_length(G)
+    print("Media del cammino più breve:", average_shortest_path)
+else:
+    components = list(nx.connected_components(G))
+    for i, component in enumerate(components):
+        component_graph = G.subgraph(component)
+        average_shortest_path = nx.average_shortest_path_length(component_graph)
+        print(f"Componente {i+1}: Media del cammino più breve:", average_shortest_path)
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 8))
+nx.draw(G, with_labels=True, node_size=200, node_color='skyblue', font_size=8)
+plt.title('Grafo G')
+plt.show()
+
+
+centralities_df = pd.DataFrame({
+    'Nodo': list(G.nodes()),
+    'Degree Centrality': list(degree_centrality.values()),
+    'Clustering': list(clustering.values()),
+    'Closeness Centrality': list(closeness_centrality.values()),
+    'Betweenness Centrality': list(betweenness_centrality.values()),
+    'Structural Holes (Constraint)': list(structural_holes.values()),
+    'global_clustering': [global_clustering] * len(G.nodes()),  # Assegna lo stesso valore a tutti i nodi
+})
+
+
+
+
+centralities_df.to_excel('und_net_23_indeces.xlsx', index=False)
+
+
+print(centralities_df)
+
+##########################
+########Direct network#######
+
+import pandas as pd
+import networkx as nx
+
+
+df = pd.read_csv("risultati_dir_net_new.txt", sep='\t')
+
+
+df = df.sort_values(by='q_normalized')
+
+
+percentile_95 = df['q_normalized'].quantile(0.95)
+
+
+df['A_q_23'] = df['q_normalized'].apply(lambda x: 1 if x >= percentile_95 else 0)
+
+
+print(df)
+
+
+import networkx as nx
+import pandas as pd
+
+
+
+G_directed = nx.DiGraph()
+
+
+for _, row in df.iterrows():
+    # Aggiungo i nodi
+    G_directed.add_node(row['id_i'])
+    G_directed.add_node(row['id_j'])
+
+    if row['A_q_23'] != 0:
+        G_directed.add_edge(row['id_i'], row['id_j'], weight=row['A_q_23'])
+
+
+print("Numero di nodi:", G_directed.number_of_nodes())
+print("Numero di archi:", G_directed.number_of_edges())
+
+
+total_in_strength = sum(dict(G_directed.in_degree(weight='weight')).values())
+total_out_strength = sum(dict(G_directed.out_degree(weight='weight')).values())
+
+in_strength_norm = {node: G_directed.in_degree(node, weight='weight') / total_in_strength for node in G_directed.nodes}
+out_strength_norm= {node: G_directed.out_degree(node, weight='weight') / total_out_strength for node in G_directed.nodes}
+
+
+network_divergence = {node: out_strength_norm[node] - in_strength_norm[node] for node in G_directed.nodes}
+
+
+print("In Strength per ogni nodo:", in_strength_norm)
+print("Out Strength per ogni nodo:", out_strength_norm)
+print("Network Divergence per ogni nodo:", network_divergence)
+
+
+
+new_df = pd.DataFrame({
+    'Nodo': list(G_directed.nodes()),
+    'In Strength': [in_strength_norm[node] for node in G_directed.nodes()],
+    'Out Strength': [out_strength_norm[node] for node in G_directed.nodes()],
+    'Network Divergence': [network_divergence[node] for node in G_directed.nodes()]
+})
+
+
+new_df.to_excel('dir_net_23_indeces.xlsx', index=False)
+
+
+print(new_df)

@@ -1,0 +1,212 @@
+import pandas as pd
+import pyreadstat
+import itertools
+
+
+file_path = r'data_last.dta'
+
+
+df, meta = pyreadstat.read_dta(file_path)
+
+
+df['year_str'] = pd.to_numeric(df['year_str'], errors='coerce')
+
+
+df = df.sort_values(by=['id', 'year_str', 'month_str']).reset_index(drop=True)
+
+
+df['evento'] = (df['SPI'] == 1)
+
+df['start_event'] = (~df['evento'].shift(1).fillna(False) & df['evento'] & (df['evento'].shift(-1).fillna(False) | df['evento'].shift(-2).fillna(False)))
+df.loc[df['start_event'] & ~df['start_event'].shift(1).fillna(False), 'start_event'] = (df['evento'] & df['evento'].shift(-1).fillna(False) & df['evento'].shift(-2).fillna(False))
+
+
+df['event_index'] = df.groupby('id').cumcount()
+
+
+df['num_start_events'] = df.groupby('id')['start_event'].transform('sum')
+
+
+start_events_indices = df[df['start_event']]
+
+
+unique_ids = df['id'].unique()
+
+
+node_combinations = list(itertools.product(unique_ids, repeat=2))
+
+
+event_pairs = []
+
+# Itero su tutte le combinazioni di nodi
+for node_combination in node_combinations:
+    # Seleziono i dati relativi ai nodi della combinazione
+    node_df_i = start_events_indices[start_events_indices['id'] == node_combination[0]]
+    node_df_j = start_events_indices[start_events_indices['id'] == node_combination[1]]
+    
+    
+    event_indices_i = node_df_i['event_index'].values
+    event_indices_j = node_df_j['event_index'].values
+    
+    
+    for event_index_i in event_indices_i:
+        for event_index_j in event_indices_j:
+            # Aggiungo la coppia di eventi alla lista
+            event_pairs.append({
+                'event_index_i': event_index_i,
+                'event_index_j': event_index_j,
+                'id_i': node_combination[0],
+                'id_j': node_combination[1],
+                'start_event': True
+            })
+
+
+combinations_df = pd.DataFrame(event_pairs)
+
+
+combinations_df['difference_divided_by_2'] = abs(combinations_df['event_index_i'] - combinations_df['event_index_j']) / 2
+
+event_index_j
+combinations_df['dif_divided_by_2'] = (combinations_df['event_index_i'] - combinations_df['event_index_j']) / 2
+
+
+combinations_df = combinations_df[combinations_df['id_i'] != combinations_df['id_j']].reset_index(drop=True)
+
+
+combinations_df['min'] = ((combinations_df['difference_divided_by_2'].lt(combinations_df['difference_divided_by_2'].shift(1)) 
+                            & combinations_df['difference_divided_by_2'].lt(combinations_df['difference_divided_by_2'].shift(-1)))
+                            & (combinations_df['id_i'] == combinations_df['id_i'].shift(1))
+                            & (combinations_df['id_i'] == combinations_df['id_i'].shift(-1))).astype(int)
+
+
+combinations_df['is_first_row'] = (combinations_df['id_i'] != combinations_df['id_i'].shift(1)).astype(int)
+
+
+combinations_df['min_first'] = ((combinations_df['is_first_row'] == 1) & (combinations_df['difference_divided_by_2'] < combinations_df['difference_divided_by_2'].shift(-1))).astype(int)
+
+
+combinations_df['is_last_row'] = (combinations_df['id_i'] != combinations_df['id_i'].shift(-1)).astype(int)
+
+
+combinations_df['min_last'] = ((combinations_df['is_last_row'] == 1) & (combinations_df['difference_divided_by_2'] < combinations_df['difference_divided_by_2'].shift(1))).astype(int)
+
+
+combinations_df['min_final'] = ((combinations_df['min_first'] == 1) | (combinations_df['min_last'] == 1) | (combinations_df['min'] == 1)).astype(int)
+
+
+combinations_df['is_difference_below_or_equal_3'] = combinations_df['difference_divided_by_2'] <= 3
+
+
+combinations_df['J'] = 0  # Inizializza a zero
+combinations_df['J'] = combinations_df['J'].astype(float)
+
+
+combinations_df.loc[(combinations_df['difference_divided_by_2'] > 0) & (combinations_df['min_final'] == 1), 'J'] = 1
+
+
+combinations_df['c_i_j'] = (combinations_df['event_index_j'] > combinations_df['event_index_i']).astype(int)
+
+
+combinations_df['c_j_i'] = (combinations_df['event_index_j'] < combinations_df['event_index_i']).astype(int)
+
+
+ni_values = df.groupby('id')['start_event'].sum().to_dict()
+combinations_df['ni'] = combinations_df['id_i'].map(ni_values)
+combinations_df['nj'] = combinations_df['id_j'].map(ni_values)
+
+
+combinations_df['sqrt_nixnj'] = (combinations_df['ni'] * combinations_df['nj']).pow(0.5)
+
+
+print(combinations_df.head(35))
+
+import pandas as pd
+
+
+combinations_df.reset_index(drop=True, inplace=True)
+
+####################################################
+
+filtered_rows = combinations_df[combinations_df['is_difference_below_or_equal_3'] == True]
+
+
+filtered_sum_J = filtered_rows.groupby(['id_i', 'id_j'])['J'].sum().reset_index()
+filtered_sum_J.columns = ['id_i', 'id_j', 'sum_J']
+
+e
+combinations_df = combinations_df.merge(filtered_sum_J, on=['id_i', 'id_j'], how='left')
+
+
+print(combinations_df.iloc[0:30])
+
+
+combinations_df.to_csv('Directed_combinations_df.txt', sep='\t', index=False)
+
+import pandas as pd
+
+
+columns_to_keep = ['id_i', 'id_j', 'c_i_j', 'c_j_i', 'sqrt_nixnj', 'ni', 'nj' , 'event_index_i', 'event_index_j', 'J', 'is_difference_below_or_equal_3']
+
+
+with open('Directed_combinations_df.txt', 'r') as file:
+    # Leggi la prima riga per ottenere i nomi delle colonne
+    header = file.readline().strip().split('\t')  # Utilizza '\t' come separatore
+
+    
+    indices_to_keep = [header.index(col) for col in columns_to_keep]
+
+    
+    with open('Directed_combinations_df_filtered.txt', 'w') as output_file:
+        
+        output_file.write('\t'.join([header[i] for i in indices_to_keep]) + '\n')  
+
+       e
+        for line in file:
+            values = line.strip().split('\t')  # Separa i valori della riga
+            filtered_values = [values[i] for i in indices_to_keep]                                   output_file.write('\t'.join(filtered_values) + '\n')  #######################################################
+
+import pandas as pd
+
+
+df_from_file = pd.read_csv('Directed_combinations_df_filtered.txt', delimiter='\t')
+
+import pandas as pd
+
+# Carica il DataFrame filtrato dal file
+df_from_file = pd.read_csv('Directed_combinations_df_filtered.txt', delimiter='\t')
+
+filtered_df = df_from_file[(df_from_file['is_difference_below_or_equal_3'] == True)]
+
+
+filtered_df.loc[:, 'c_i_j_div_ni'] = filtered_df['c_i_j'] / filtered_df['ni']
+filtered_df.loc[:, 'c_j_i_div_nj'] = filtered_df['c_j_i'] / filtered_df['nj']
+
+
+print(filtered_df.iloc[0:70])
+
+
+filtered_df.loc[:, 'diff_sum_ones'] = filtered_df['c_i_j_div_ni'] - filtered_df['c_j_i_div_nj']
+
+
+sum_diff_sum_ones = filtered_df.groupby(['id_i', 'id_j'])['diff_sum_ones'].sum().reset_index()
+
+
+print(sum_diff_sum_ones.head(70))
+
+
+q = filtered_df.groupby(['id_i', 'id_j'])['diff_sum_ones'].sum()
+
+
+q_df = q.reset_index(name='q')
+
+
+q_df['q_normalized'] = (q_df['q'] - q_df['q'].min()) / (q_df['q'].max() - q_df['q'].min()) * 2 - 1
+
+
+output_file_unique = q_df[['id_i', 'id_j', 'q_normalized']]
+
+
+print(output_file_unique.iloc[0:40])
+
+
+output_file_unique.to_csv('risultati_dir_net_new.txt', sep='\t', index=False)
