@@ -15,4 +15,18 @@ Notes:
 Ensure that all scripts are run sequentially to avoid errors due to missing intermediate results.
 Save all outputs in the designated folders to ensure figures and results align with the paper's presentation.
 
+For Graphs:
+
+Shapefile: Po River Basin
+The shapefile containing the boundaries of the Po River Basin was obtained from the official website of the Po River Basin Authority. This dataset provides the official hydrological boundaries of the Po Basin.
+Source: Po River Basin Authority
+https://www.adbpo.it/
+https://www.adbpo.it/download/webgis/cartografia_di_base/
+
+Shapefile: Lakes and Rivers
+The shapefiles for global lakes and river networks were sourced from the HydroSHEDS project. These datasets are ideal for hydrological and ecological studies.
+https://www.hydrosheds.org/products/hydrobasins
+
+
+
 Feel free to contact us for further clarifications or assistance!
