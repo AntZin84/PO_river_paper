@@ -19,7 +19,7 @@ Save all outputs in the designated folders to ensure figures and results align w
 
 To generate the plots used in the paper, follow these steps:
 
-Navigate to the folder code_plot. Use the provided input files to execute the scripts:
+Use the provided input files to execute the scripts:
 
 Rid_tp_Monthly_ERA5_1940-2023.nc: NetCDF file containing monthly precipitation data.
 community_detection_po_basin.csv: Data from community detection analysis in the Po Basin.
